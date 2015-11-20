@@ -14,7 +14,7 @@ var ohash = require('object-hash');
 var argv = process.argv.slice(2);
 
 function usage() {
-	console.log('node index.js user=blablabla dl_root=blabla');
+	console.log('node index.js user=blablabla dl_root=blabla tag=blabla fold=blabla');
 }
 
 if (argv.length < 1) {
