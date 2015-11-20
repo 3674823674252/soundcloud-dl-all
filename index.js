@@ -9,6 +9,7 @@ var cp = require('child_process');
 
 var ffmd = require('ffmetadata');
 var tmp = require('tmp');
+var ohash = require('object-hash');
 
 var argv = process.argv.slice(2);
 
@@ -86,6 +87,30 @@ function download_tracks(tracks) {
 	tracks = tracks.length? tracks : [];
 	console.log(`${user} has ${tracks.length} tracks`);
 
+	if (!tracks.length) {
+		return;
+	}
+
+	var hash = ohash.sha1(tracks);
+
+	if (!fs.existsSync(`${dl_root}/${user}`)) {
+		console.log(`creating a directory for ${user}..`);
+		fs.mkdirSync(`${dl_root}/${user}`);
+	} else if (!fs.existsSync(`${dl_root}/${user}/.hash`)) {
+		console.log(`older folder for ${user} detected (no hash), overwriting..`);
+		cp.execSync(`rm -rf ${dl_root}/${user}`);
+		fs.mkdirSync(`${dl_root}/${user}`);
+	} else if (fs.readFileSync(`${dl_root}/${user}/.hash`).toString() !== hash) {
+		console.log(`older folder for ${user} detected (hashes didnt conincide), overwriting..`);
+		cp.execSync(`rm -rf ${dl_root}/${user}`);
+		fs.mkdirSync(`${dl_root}/${user}`);
+	} else {
+		console.log('nothing has changed since you last downloaded it..');
+		process.exit(1);
+	}
+
+	fs.writeFileSync(`${dl_root}/${user}/.hash`, hash);
+
 	[].forEach.call(tracks, function(track) {
 		var stream = track.stream_url;
 		stream = `${stream}?${client_id}`;
@@ -144,14 +169,6 @@ function download_track(url, info) {
 		var size = res.headers['content-length'];
 		var total = 0;
 
-		if (!fs.existsSync(`${dl_root}/${user}`)) {
-			fs.mkdirSync(`${dl_root}/${user}`);
-		}
-
-		if (fs.existsSync(`${dl_root}/${user}/${name}.mp3`)) {
-			console.log(`${name} already exists in place, skippin..`);
-			return;
-		}
 		var file = fs.createWriteStream(`${dl_root}/${user}/${name}.mp3`);
 		res.pipe(file);
 		res.on('data', (d) => {
