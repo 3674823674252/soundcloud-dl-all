@@ -1,5 +1,5 @@
 # soundcloud-dl-all
-a small script to download all track previews from someone's soundcloud page. it will not work if you are using windows (because it cannot recursively delete folders on windows).
+a small script to download all track previews from someone's soundcloud page.
 
 use it like this:
  
