@@ -10,6 +10,7 @@ var cp = require('child_process');
 var ffmd = require('ffmetadata');
 var tmp = require('tmp');
 var ohash = require('object-hash');
+var rimraf = require('rimraf');
 
 var argv = process.argv.slice(2);
 
@@ -150,11 +151,11 @@ function download_tracks(is_top_level, fold, root_folder, tracks) {
 			fs.mkdirSync(`${root_folder}`);
 		} else if (!fs.existsSync(`${root_folder}/.hash`)) {
 			console.log(`older folder for ${user} called ${root_folder} detected (no hash), overwriting..`);
-			cp.execSync(`rm -rf ${root_folder}`);
+			rimraf.sync(`${root_folder}`);
 			fs.mkdirSync(`${root_folder}`);
 		} else if (fs.readFileSync(`${root_folder}/.hash`).toString() !== hash) {
 			console.log(`older folder for ${user} called ${root_folder} detected (hashes didnt conincide), overwriting..`);
-			cp.execSync(`rm -rf ${root_folder}`);
+			rimraf.sync(`${root_folder}`);
 			fs.mkdirSync(`${root_folder}`);
 		} else {
 			console.log('nothing has changed since you last downloaded it..');
