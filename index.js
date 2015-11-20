@@ -82,7 +82,7 @@ http.get(tracks_endpoint, function (res) {
 		}
 
 		try {
-			download_tracks(true, fold, `${dl_root}/${user}`, JSON.parse(body));
+			download_tracks(true, fold, `${dl_root}/${user}`, 'track from soundcloud', JSON.parse(body));
 		} catch (e) {
 			console.log(`Response error ${e}. Say that to the dev!`);
 			process.exit(1);
@@ -118,7 +118,7 @@ function maybefold(is_top, cb) {
 	});
 }
 
-function download_tracks(is_top_level, fold, root_folder, tracks) {
+function download_tracks(is_top_level, fold, root_folder, album, tracks) {
 	if (!tracks.length) {
 		return;
 	}
@@ -207,7 +207,8 @@ function download_tracks(is_top_level, fold, root_folder, tracks) {
 					return notfound;
 				});
 
-				download_tracks(false, false, root, playlist.tracks);
+				name = playlist.title.toLowerCase();
+				download_tracks(false, false, root, name, playlist.tracks);
 			});
 		}
 
@@ -251,7 +252,8 @@ function download_tracks(is_top_level, fold, root_folder, tracks) {
 						title: track.title,
 						date: track.created_at,
 						artist: track.user.username,
-						artwork: artwork_cb
+						artwork: artwork_cb,
+						album: album
 					});
 				})
 			})
@@ -265,6 +267,7 @@ function download_track(url, root, info) {
 	var artist = info.artist;
 	var title = info.title;
 	var artwork = info.artwork;
+	var album = info.album || 'track from soundcloud';
 
 	https.get(url, (res) => {
 		var size = res.headers['content-length'];
@@ -287,7 +290,7 @@ function download_track(url, root, info) {
 				tag.artist = artist.toLowerCase();
 				tag.title = title.toLowerCase();
 				tag.date = new Date(date).getUTCFullYear() + '';
-				tag.album = 'from soundcloud';
+				tag.album = album;
 				
 				console.log(`downloading artwork for ${name}..`);
 
