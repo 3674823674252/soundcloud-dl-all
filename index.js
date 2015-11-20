@@ -25,6 +25,8 @@ if (argv.length < 1) {
 var user;
 var dl_root;
 var tagging = false;
+var fold = false;
+
 argv.forEach((arg) => {
 	var split = arg.split('=');
 	if (split[0] === 'user') {
@@ -38,6 +40,8 @@ argv.forEach((arg) => {
 			console.log('tagging is enabled');
 			tagging = true;
 		}
+	} else if (split[0] === 'fold') {
+		fold = true;
 	} else {
 		usage();
 		process.exit(1);
@@ -52,7 +56,9 @@ if (!fs.existsSync(dl_root)) {
 }
 
 var tracks_endpoint = `${api_endpoint}/users/${user}/tracks?${client_id}`;
-var user_endpoint = `${api_endpoint}/users/${user}?${client_id}`
+var user_endpoint = `${api_endpoint}/users/${user}?${client_id}`;
+var playlists_endpoint = `${api_endpoint}/users/${user}/playlists?${client_id}`;
+
 var track;	
 
 if (!user) {
@@ -75,7 +81,7 @@ http.get(tracks_endpoint, function (res) {
 		}
 
 		try {
-			download_tracks(JSON.parse(body));
+			download_tracks(true, fold, `${dl_root}/${user}`, JSON.parse(body));
 		} catch (e) {
 			console.log(`Response error ${e}. Say that to the dev!`);
 			process.exit(1);
@@ -83,109 +89,176 @@ http.get(tracks_endpoint, function (res) {
 	});
 });
 
-function download_tracks(tracks) {
-	tracks = tracks.length? tracks : [];
-	console.log(`${user} has ${tracks.length} tracks`);
+function maybefold(is_top, cb) {
+	if (!is_top) {
+		return cb(false);
+	}
 
+	http.get(playlists_endpoint, (res) => {
+		var body = '';
+
+		res.on('data', function (b) {
+			body += b;
+		});
+
+		res.on('end', function (b) {
+			if (b) {
+				body += b;
+			}
+
+			var playlists = JSON.parse(body);
+
+			if (!playlists.length) {
+				playlists = false;
+			}
+
+			cb(playlists);
+		});
+	});
+}
+
+function download_tracks(is_top_level, fold, root_folder, tracks) {
 	if (!tracks.length) {
 		return;
 	}
 
-	var hash = ohash.sha1(tracks);
-
-	if (!fs.existsSync(`${dl_root}/${user}`)) {
-		console.log(`creating a directory for ${user}..`);
-		fs.mkdirSync(`${dl_root}/${user}`);
-	} else if (!fs.existsSync(`${dl_root}/${user}/.hash`)) {
-		console.log(`older folder for ${user} detected (no hash), overwriting..`);
-		cp.execSync(`rm -rf ${dl_root}/${user}`);
-		fs.mkdirSync(`${dl_root}/${user}`);
-	} else if (fs.readFileSync(`${dl_root}/${user}/.hash`).toString() !== hash) {
-		console.log(`older folder for ${user} detected (hashes didnt conincide), overwriting..`);
-		cp.execSync(`rm -rf ${dl_root}/${user}`);
-		fs.mkdirSync(`${dl_root}/${user}`);
-	} else {
-		console.log('nothing has changed since you last downloaded it..');
-		process.exit(1);
+	if (is_top_level) {
+		console.log(`${user} has ${tracks.length} tracks`);
 	}
 
-	fs.writeFileSync(`${dl_root}/${user}/.hash`, hash);
+	maybefold(is_top_level, (playlists) => {
+		if (!playlists) {
+			fold = false;
+		}
 
-	var avatar = tracks[0].user.avatar_url;
+		var hash_object = {
+			tracks: tracks
+		};
 
-	if (avatar.indexOf('default') === -1) {
-		console.log(`getting an avatar image of ${user}...`);
-		http.get(user_endpoint, (res) => {
-			var body = '';
-			res.on('data', (d) => {
-				body += d;
-			});
+		if (fold) {
+			hash_object.playlists = playlists;
+		}
 
-			res.on('end', (d) => {
-				if (d) {
+		var hash = ohash.sha1(hash_object);
+
+		if (fold) {
+			root_folder += '_with_playlists';
+		}
+
+		if (!fs.existsSync(`${root_folder}`)) {
+			console.log(`creating a directory for ${user} called ${root_folder}..`);
+			fs.mkdirSync(`${root_folder}`);
+		} else if (!fs.existsSync(`${root_folder}/.hash`)) {
+			console.log(`older folder for ${user} called ${root_folder} detected (no hash), overwriting..`);
+			cp.execSync(`rm -rf ${root_folder}`);
+			fs.mkdirSync(`${root_folder}`);
+		} else if (fs.readFileSync(`${root_folder}/.hash`).toString() !== hash) {
+			console.log(`older folder for ${user} called ${root_folder} detected (hashes didnt conincide), overwriting..`);
+			cp.execSync(`rm -rf ${root_folder}`);
+			fs.mkdirSync(`${root_folder}`);
+		} else {
+			console.log('nothing has changed since you last downloaded it..');
+			process.exit(1);
+		}
+
+		fs.writeFileSync(`${root_folder}/.hash`, hash);
+
+		var avatar = tracks[0].user.avatar_url;
+
+		if (avatar.indexOf('default') === -1 && is_top_level) {
+			http.get(user_endpoint, (res) => {
+				var body = '';
+				res.on('data', (d) => {
 					body += d;
-				}
-
-				avatar = JSON.parse(body).avatar_url;
-
-				https.get(avatar, (res) => {
-					var avatarFile = `${dl_root}/${user}/${user}_avatar.png`;
-					console.log(avatar);
-					var stream = fs.createWriteStream(avatarFile);
-					res.pipe(stream);
 				});
+
+				res.on('end', (d) => {
+					if (d) {
+						body += d;
+					}
+
+					avatar = JSON.parse(body).avatar_url;
+					avatar = avatar.replace('-large.jpg', '-t500x500.jpg');
+
+					https.get(avatar, (res) => {
+						console.log(`getting an avatar image of ${user} from ${avatar}...`);
+						var avatarFile = `${root_folder}/${user}_avatar.jpg`;
+						var stream = fs.createWriteStream(avatarFile);
+						res.pipe(stream);
+					});
+				})
+			});
+		}
+
+		if (fold) {
+			[].forEach.call(playlists, function (playlist) {
+				var name = playlist.permalink;
+				var root = `${root_folder}/${name}`;
+
+				tracks = [].filter.call(tracks, (track) => {
+					var notfound = true;
+					[].forEach.call(playlist.tracks, (ptrack) => {
+						if (ptrack.id === track.id) {
+							notfound = false;
+						}
+					});
+
+					return notfound;
+				});
+
+				download_tracks(false, false, root, playlist.tracks);
+			});
+		}
+
+		[].forEach.call(tracks, function(track) {
+			var stream = track.stream_url;
+			stream = `${stream}?${client_id}`;
+			https.get(stream, function (res) {
+				var body = '';
+
+				res.on('data', function (d) {
+					body += d;
+				});
+
+				res.on('end', function (d) {
+					if (d) {
+						body += d;
+					}
+
+					function artwork_cb(cb) {
+						if (track.artwork_url) {
+							https.get(track.artwork_url, function (res) {
+								var img = [];
+								res.on('data', function (b) {
+									img.push(b);
+								});
+								res.on('end', function (b) {
+									if (b) {
+										img.push(b);
+									}
+
+									cb(Buffer.concat(img));
+								});
+							});
+						} else {
+							cb([]);
+						}
+					}
+
+					download_track(JSON.parse(body).location, root_folder, {
+						name: track.permalink,
+						title: track.title,
+						date: track.created_at,
+						artist: track.user.username,
+						artwork: artwork_cb
+					});
+				})
 			})
 		});
-	}
-
-	[].forEach.call(tracks, function(track) {
-		var stream = track.stream_url;
-		stream = `${stream}?${client_id}`;
-		https.get(stream, function (res) {
-			var body = '';
-
-			res.on('data', function (d) {
-				body += d;
-			});
-
-			res.on('end', function (d) {
-				if (d) {
-					body += d;
-				}
-
-				function artwork_cb(cb) {
-					if (track.artwork_url) {
-						https.get(track.artwork_url, function (res) {
-							var img = [];
-							res.on('data', function (b) {
-								img.push(b);
-							});
-							res.on('end', function (b) {
-								if (b) {
-									img.push(b);
-								}
-
-								cb(Buffer.concat(img));
-							});
-						});
-					} else {
-						cb([]);
-					}
-				}
-
-				download_track(JSON.parse(body).location, {
-					name: track.permalink,
-					title: track.title,
-					date: track.created_at,
-					artist: track.user.username,
-					artwork: artwork_cb
-				});
-			})
-		})
 	});
 }
 
-function download_track(url, info) {
+function download_track(url, root, info) {
 	var name = info.name;
 	var date = info.date;
 	var artist = info.artist;
@@ -196,7 +269,7 @@ function download_track(url, info) {
 		var size = res.headers['content-length'];
 		var total = 0;
 
-		var file = fs.createWriteStream(`${dl_root}/${user}/${name}.mp3`);
+		var file = fs.createWriteStream(`${root}/${name}.mp3`);
 		res.pipe(file);
 		res.on('data', (d) => {
 			total += d.length;
@@ -219,7 +292,7 @@ function download_track(url, info) {
 
 				artwork(function (img) {
 					if (!img.length) {
-						ffmd.write(`${dl_root}/${user}/${name}.mp3`, tag, () => {
+						ffmd.write(`${root}/${name}.mp3`, tag, () => {
 							console.log(`tagged ${name}..`);
 						})
 					} else {
@@ -229,7 +302,7 @@ function download_track(url, info) {
 							str.end();
 							var options = { attachments: [path] };
 
-							ffmd.write(`${dl_root}/${user}/${name}.mp3`, tag, options, () => {
+							ffmd.write(`${root}/${name}.mp3`, tag, options, () => {
 								console.log(`tagged ${name}..`);
 								cb();
 							})
