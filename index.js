@@ -5,6 +5,10 @@ var track_endpoint = `${api_endpoint}/tracks/${track}?{client_id}`;
 var http = require('http');
 var https = require('https');
 var fs = require('fs');
+var cp = require('child_process');
+
+var ffmd = require('ffmetadata');
+
 var argv = process.argv.slice(2);
 
 function usage() {
@@ -18,12 +22,20 @@ if (argv.length < 1) {
 
 var user;
 var dl_root;
+var tagging = false;
 argv.forEach((arg) => {
 	var split = arg.split('=');
 	if (split[0] === 'user') {
 		user = split[1];
 	} else if (split[0] === 'dl_root') {
 		dl_root = split[1];
+	} else if (split[0] === 'tag') {
+		if (!cp.execSync('which ffmpeg')) {
+			console.log('couldnt find ffmpeg, tagging is disabled');
+		} else {
+			console.log('tagging is enabled');
+			tagging = true;
+		}
 	} else {
 		usage();
 		process.exit(1);
@@ -71,7 +83,7 @@ http.get(tracks_endpoint, function (res) {
 
 function download_tracks(tracks) {
 	tracks = tracks.length? tracks : [];
-	console.log(tracks.length);
+	console.log(`${user} has ${tracks.length} tracks`);
 
 	[].forEach.call(tracks, function(track) {
 		var stream = track.stream_url;
@@ -88,13 +100,23 @@ function download_tracks(tracks) {
 					body += d;
 				}
 
-				download_track(JSON.parse(body).location, track.permalink);
+				download_track(JSON.parse(body).location, {
+					name: track.permalink,
+					title: track.title,
+					date: track.created_at,
+					artist: track.user.username
+				});
 			})
 		})
 	});
 }
 
-function download_track(url, name) {
+function download_track(url, info) {
+	var name = info.name;
+	var date = info.date;
+	var artist = info.artist;
+	var title = info.title;
+
 	https.get(url, (res) => {
 		var size = res.headers['content-length'];
 		var total = 0;
@@ -111,10 +133,25 @@ function download_track(url, name) {
 		res.pipe(file);
 		res.on('data', (d) => {
 			total += d.length;
-			console.log(`-${Math.round(100 * (total / size))}% of ${name} is downloaded`);
+			console.log(`:::${Math.round(100 * (total / size))}% of ${name} is downloaded`);
 		});
 		res.on('end', () => {
 			console.log(`${name} downloaded`);
+
+			if (tagging) {
+				console.log(`tagging ${name}...`);
+
+				var tag = {};
+				
+				tag.artist = artist.toLowerCase();
+				tag.title = title.toLowerCase();
+				tag.date = new Date(date).getUTCFullYear() + '';
+				tag.album = 'from soundcloud';
+
+				ffmd.write(`${dl_root}/${user}/${name}.mp3`, tag, () => {
+					console.log(`tagged ${name}..`);
+				})
+			}
 		});
 
 	})
