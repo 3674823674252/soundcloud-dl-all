@@ -8,6 +8,7 @@ var fs = require('fs');
 var cp = require('child_process');
 
 var ffmd = require('ffmetadata');
+var tmp = require('tmp');
 
 var argv = process.argv.slice(2);
 
@@ -100,11 +101,32 @@ function download_tracks(tracks) {
 					body += d;
 				}
 
+				function artwork_cb(cb) {
+					if (track.artwork_url) {
+						https.get(track.artwork_url, function (res) {
+							var img = [];
+							res.on('data', function (b) {
+								img.push(b);
+							});
+							res.on('end', function (b) {
+								if (b) {
+									img.push(b);
+								}
+
+								cb(Buffer.concat(img));
+							});
+						});
+					} else {
+						cb([]);
+					}
+				}
+
 				download_track(JSON.parse(body).location, {
 					name: track.permalink,
 					title: track.title,
 					date: track.created_at,
-					artist: track.user.username
+					artist: track.user.username,
+					artwork: artwork_cb
 				});
 			})
 		})
@@ -116,6 +138,7 @@ function download_track(url, info) {
 	var date = info.date;
 	var artist = info.artist;
 	var title = info.title;
+	var artwork = info.artwork;
 
 	https.get(url, (res) => {
 		var size = res.headers['content-length'];
@@ -147,10 +170,29 @@ function download_track(url, info) {
 				tag.title = title.toLowerCase();
 				tag.date = new Date(date).getUTCFullYear() + '';
 				tag.album = 'from soundcloud';
+				
+				console.log(`downloading artwork for ${name}..`);
 
-				ffmd.write(`${dl_root}/${user}/${name}.mp3`, tag, () => {
-					console.log(`tagged ${name}..`);
-				})
+				artwork(function (img) {
+					if (!img.length) {
+						ffmd.write(`${dl_root}/${user}/${name}.mp3`, tag, () => {
+							console.log(`tagged ${name}..`);
+						})
+					} else {
+						tmp.file((_, path, _1, cb) => {
+							var str = fs.createWriteStream(path);
+							str.write(img);
+							str.end();
+							var options = { attachments: [path] };
+
+							ffmd.write(`${dl_root}/${user}/${name}.mp3`, tag, options, () => {
+								console.log(`tagged ${name}..`);
+								cb();
+							})
+						});
+					}
+				});
+				
 			}
 		});
 
