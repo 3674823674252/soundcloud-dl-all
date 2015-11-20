@@ -7,19 +7,36 @@ var https = require('https');
 var fs = require('fs');
 var argv = process.argv.slice(2);
 
-if (argv.length !== 1) {
+function usage() {
+	console.log('node index.js user=blablabla dl_root=blabla');
+}
+
+if (argv.length < 1) {
 	usage();
 	process.exit(1);
 }
 
-var split = argv[0].split('=');
+var user;
+var dl_root;
+argv.forEach((arg) => {
+	var split = arg.split('=');
+	if (split[0] === 'user') {
+		user = split[1];
+	} else if (split[0] === 'dl_root') {
+		dl_root = split[1];
+	} else {
+		usage();
+		process.exit(1);
+	}
+});
 
-if (split[0] !== 'user') {
-	usage();
+dl_root = dl_root || '.';
+
+if (!fs.existsSync(dl_root)) {
+	console.log(`dl_root ${dl_root} doesnt exist. please create it`);
 	process.exit(1);
 }
 
-var user = split[1];
 var tracks_endpoint = `${api_endpoint}/users/${user}/tracks?${client_id}`;
 
 var track;	
@@ -82,15 +99,15 @@ function download_track(url, name) {
 		var size = res.headers['content-length'];
 		var total = 0;
 
-		if (!fs.existsSync(`./${user}`)) {
-			fs.mkdirSync(`./${user}`);
+		if (!fs.existsSync(`${dl_root}/${user}`)) {
+			fs.mkdirSync(`${dl_root}/${user}`);
 		}
 
-		if (fs.existsSync(`./${user}/${name}.mp3`)) {
+		if (fs.existsSync(`${dl_root}/${user}/${name}.mp3`)) {
 			console.log(`${name} already exists in place, skippin..`);
 			return;
 		}
-		var file = fs.createWriteStream(`./${user}/${name}.mp3`);
+		var file = fs.createWriteStream(`${dl_root}/${user}/${name}.mp3`);
 		res.pipe(file);
 		res.on('data', (d) => {
 			total += d.length;
