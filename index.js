@@ -52,7 +52,7 @@ if (!fs.existsSync(dl_root)) {
 }
 
 var tracks_endpoint = `${api_endpoint}/users/${user}/tracks?${client_id}`;
-
+var user_endpoint = `${api_endpoint}/users/${user}?${client_id}`
 var track;	
 
 if (!user) {
@@ -110,6 +110,33 @@ function download_tracks(tracks) {
 	}
 
 	fs.writeFileSync(`${dl_root}/${user}/.hash`, hash);
+
+	var avatar = tracks[0].user.avatar_url;
+
+	if (avatar.indexOf('default') === -1) {
+		console.log(`getting an avatar image of ${user}...`);
+		http.get(user_endpoint, (res) => {
+			var body = '';
+			res.on('data', (d) => {
+				body += d;
+			});
+
+			res.on('end', (d) => {
+				if (d) {
+					body += d;
+				}
+
+				avatar = JSON.parse(body).avatar_url;
+
+				https.get(avatar, (res) => {
+					var avatarFile = `${dl_root}/${user}/${user}_avatar.png`;
+					console.log(avatar);
+					var stream = fs.createWriteStream(avatarFile);
+					res.pipe(stream);
+				});
+			})
+		});
+	}
 
 	[].forEach.call(tracks, function(track) {
 		var stream = track.stream_url;
@@ -173,7 +200,7 @@ function download_track(url, info) {
 		res.pipe(file);
 		res.on('data', (d) => {
 			total += d.length;
-			console.log(`:::${Math.round(100 * (total / size))}% of ${name} is downloaded`);
+			//console.log(`:::${Math.round(100 * (total / size))}% of ${name} is downloaded`);
 		});
 		res.on('end', () => {
 			console.log(`${name} downloaded`);
