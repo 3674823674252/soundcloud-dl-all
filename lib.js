@@ -1,5 +1,3 @@
-var client_id = 'client_id=986b39d4513a5b501d57d973318715f0'; // thanks Mr Someone for sharing your client id!
-
 var http = require('http');
 var https = require('https');
 var fs = require('fs');
@@ -10,10 +8,16 @@ var tmp = require('tmp');
 var ohash = require('object-hash');
 var rimraf = require('rimraf');
 
-module.exports.dl = function (user, dl_root, tagging, fold, cb) {
+module.exports.dl = function (client_id, user, dl_root, tagging, fold, cb) {
 	if (!cb) {
 		throw new Error('please specify a callback!');
 	}
+
+	if (!client_id) {
+		cb(new Error('please specify non-zero client id!'));
+	}
+
+	client_id = 'client_id=' + client_id;
 
 	if (!cp.execSync('which ffmpeg') && tagging === true) {
 		return cb(new Error('couldnt find ffmpeg, but tagging is set to true'));
@@ -51,7 +55,7 @@ module.exports.dl = function (user, dl_root, tagging, fold, cb) {
 			try {
 				download_tracks(true, fold, `${dl_root}/${user}`, 'track from soundcloud', JSON.parse(body));
 			} catch (e) {
-				return cb(new Error(`Response error ${e}. Say that to the dev!`));
+				return cb(new Error(`Response error ${e.stack}. Say that to the dev!`));
 			}
 		});
 	});
@@ -194,7 +198,7 @@ module.exports.dl = function (user, dl_root, tagging, fold, cb) {
 					return function (name) {
 						calls++;
 						if (calls === total_tracks) {
-							cb();
+							cb(null, `${root_folder}`);
 						}
 					}
 				}());
@@ -244,7 +248,6 @@ module.exports.dl = function (user, dl_root, tagging, fold, cb) {
 								cb([]);
 							}
 						}
-
 						download_track(JSON.parse(body).location, root_folder, {
 							name: track.permalink,
 							title: track.title,

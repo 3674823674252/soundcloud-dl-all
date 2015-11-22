@@ -20,3 +20,6 @@ or you can run it programmatically like this:
 (user param is a string, dl_root is also a string, tag is boolean, fold is boolean, cb is function)
 
 always specify a callback when calling it like that, it will be invoked after all tracks are downloaded.
+
+first argument to callback is an error, second argument is a path of a folder where all tracks were downloaded to.	
+
