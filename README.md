@@ -3,7 +3,9 @@ a small script to download all track previews from someone's soundcloud page.
 
 use it like this:
  
- node run.js user=USERNAME dl_root=DLROOT fold=FOLD tag=TAG
+ node run.js user=USERNAME dl_root=DLROOT fold=FOLD tag=TAG client=CLIENT_ID
+
+client_id is mandatory!
 
 user is mandatory
 
@@ -15,9 +17,9 @@ tag is false by default. use it if you wanna tracks be automatically tagged and 
 
 or you can run it programmatically like this:
 
- require('soundcloud-dl-all').dl(user, dl_root, tag, fold, cb)
+ require('soundcloud-dl-all').dl(client, user, dl_root, tag, fold, cb)
 
-(user param is a string, dl_root is also a string, tag is boolean, fold is boolean, cb is function)
+(client and user params are strings, dl_root is also a string, tag is boolean, fold is boolean, cb is function)
 
 always specify a callback when calling it like that, it will be invoked after all tracks are downloaded.
 
