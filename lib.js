@@ -132,7 +132,7 @@ module.exports.dl = function (client_id, user, dl_root, tagging, fold, cb) {
 				fs.mkdirSync(`${root_folder}`);
 			} else {
 				console.log('nothing has changed since you last downloaded it..');
-				process.exit(1);
+				return cb(null, ${root_folder});
 			}
 
 			fs.writeFileSync(`${root_folder}/.hash`, hash);
